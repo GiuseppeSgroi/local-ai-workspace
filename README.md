@@ -50,3 +50,51 @@
  │ Vector Store   │        │ Ollama Server  │ (Port 11434)
  │ (Local DB/RAG) │        │ (Local LLMs)   │
  └────────────────┘        └────────────────┘
+🚀 Quick Start
+Prerequisites
+Docker Engine and Docker Compose installed.
+
+Ollama installed locally (or running via Docker container).
+
+Installation
+Clone the repository:
+
+Bash
+git clone [https://github.com/GiuseppeSgroi/local-ai-workspace.git](https://github.com/GiuseppeSgroi/local-ai-workspace.git)
+cd local-ai-workspace
+Configure environment variables:
+
+Bash
+cp .env.example .env
+Launch with Docker Compose:
+
+Bash
+docker compose up -d
+Access the Web Interface:
+Open your browser and navigate to http://localhost:3000.
+
+🛠 Tech Stack
+Frontend: Next.js 14, React, TypeScript, Tailwind CSS
+
+Backend: Python 3.11, FastAPI, Uvicorn, LangChain / LlamaIndex
+
+AI / Inference: Ollama, PyPDF2, ChromaDB / FAISS
+
+DevOps: Docker, Docker Compose, GitHub Actions
+
+🗺 Roadmap
+[ ] Add support for custom vector database connectors (Qdrant / Milvus).
+
+[ ] Implement OCR for scanned documents.
+
+[ ] Multi-user authentication & workspace roles.
+
+[ ] Audio-to-text transcript processing.
+
+🤝 Contributing
+Contributions, issues, and feature requests are welcome!
+
+Feel free to check the issues page.
+
+📜 License
+Distributed under the GNU Affero General Public License v3.0 (AGPL-3.0). See LICENSE for more information.
