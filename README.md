@@ -48,38 +48,3 @@
  │ Vector Store   │        │ Ollama Server  │ (Port 11434)
  │ (Local DB/RAG) │        │ (Local LLMs)   │
  └────────────────┘        └────────────────┘
-
----
-
-## 🚀 Guida Rapida per l'installazione (Anche per principianti)
-
-Se vuoi avviare questo workspace sul tuo computer in pochi click, segui questi passaggi:
-
-### Requisiti
-Assicurati di avere installato sul tuo PC:
-1. **Docker Desktop** (scaricabile dal sito ufficiale) e assicurati che sia aperto e attivo.
-2. **Git** (per clonare il progetto).
-
-### Passo 1: Clona o scarica il progetto
-Apri il terminale (o PowerShell su Windows) e digita:
-\`\`\`bash
-git clone https://github.com/GiuseppeSgroi/local-ai-workspace.git
-cd local-ai-workspace
-\`\`\`
-
-### Passo 2: Avvia l'applicazione con Docker
-Sempre nel terminale, all'interno della cartella del progetto, dai questo comando:
-\`\`\`bash
-docker compose up --build
-\`\`\`
-*(La prima volta ci vorrà qualche minuto per scaricare i componenti e configurare l'intelligenza artificiale).*
-
-### Passo 3: Apri l'interfaccia nel browser
-Una volta completato l'avvio, apri il tuo browser (Chrome, Edge, Firefox) e vai all'indirizzo:
-👉 **http://localhost:3000**
-
-### 💡 Come si usa:
-1. Clicca su **"Nuovo Quaderno"** nella barra laterale.
-2. Trascina un file **PDF** (es. una dispensa universitaria o un documento) nell'area di caricamento.
-3. Seleziona la modalità **Studio** (per farti spiegare i concetti) o **Esame** (per farti interrogare come all'università) in alto a destra.
-4. Fai le tue domande in chat in totale privacy!
