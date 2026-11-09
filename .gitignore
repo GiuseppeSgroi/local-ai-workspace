@@ -1,0 +1,26 @@
+# Database vettoriale locale
+backend/chroma_db/
+*.sqlite3
+
+# Python cache e ambienti
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+
+# Variabili d'ambiente e segreti
+.env
+.env.local
+
+# Node.js e dipendenze frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# File di sistema operativo e IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

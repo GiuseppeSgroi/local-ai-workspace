@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Scatola 1: Backend in Python (FastAPI)
+  backend:
+    build: ./backend
+    container_name: local_ai_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:3b
+    volumes:
+      - ./backend:/app
+      - ./backend/chroma_db:/app/chroma_db
+    depends_on:
+      - ollama
+
+  # Scatola 2: Frontend in Next.js (L'interfaccia grafica web)
+  frontend:
+    build: ./frontend
+    container_name: local_ai_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # Scatola 3: Il motore AI locale (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: local_ai_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+
+volumes:
+  ollama_storage:
