@@ -26,14 +26,22 @@ export default function Home() {
   const [uploading, setUploading] = useState<boolean>(false);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
-  // NUOVO STATO: Finestra modale per la gestione dei file
   const [isSourcesModalOpen, setIsSourcesModalOpen] = useState<boolean>(false);
+  
+  // MODALITÀ STUDIO / ESAME
+  const [studyMode, setStudyMode] = useState<"study" | "exam">("study");
+
+  // RINOMINA NOTEBOOK
+  const [isEditingName, setIsEditingName] = useState<boolean>(false);
+  const [tempName, setTempName] = useState<string>("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (activeNotebook) {
+      setTempName(activeNotebook.name);
+      setIsEditingName(false);
       const savedChat = localStorage.getItem(`chat_history_${activeNotebook.id}`);
       if (savedChat) {
         try {
@@ -75,8 +83,8 @@ export default function Home() {
   useEffect(() => {
     fetch("http://localhost:8000/health")
       .then((res) => res.json())
-      .then((data) => {
-        setStatus(`Online`);
+      .then(() => {
+        setStatus("Online");
         fetchNotebooks();
       })
       .catch(() => setStatus("Offline"));
@@ -115,6 +123,25 @@ export default function Home() {
         }
         return updated;
       });
+    }
+  };
+
+  const handleSaveRename = async () => {
+    if (!activeNotebook || !tempName.trim()) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/notebooks/${activeNotebook.id}/rename`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_name: tempName.trim() })
+      });
+      if (!res.ok) throw new Error("Rinomina fallita");
+      const data = await res.json();
+      
+      setActiveNotebook((prev) => prev ? { ...prev, name: data.name } : null);
+      setIsEditingName(false);
+      fetchNotebooks(activeNotebook.id);
+    } catch (e) {
+      alert("Errore durante la rinomina del quaderno.");
     }
   };
 
@@ -191,15 +218,10 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt || loading) return;
-
-    const userMsg = prompt;
-    setPrompt("");
+  const sendToBackend = async (textToSend: string, currentHistory: Message[]) => {
     setLoading(true);
 
-    const updatedHistory = [...messages, { role: "user" as const, content: userMsg }];
+    const updatedHistory = [...currentHistory, { role: "user" as const, content: textToSend }];
     setMessages([...updatedHistory, { role: "assistant", content: "" }]);
 
     const controller = new AbortController();
@@ -211,9 +233,10 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          message: userMsg,
+          message: textToSend,
           notebook_id: activeNotebook ? activeNotebook.id : "",
-          history: messages
+          history: currentHistory,
+          mode: studyMode
         }),
       });
 
@@ -248,10 +271,26 @@ export default function Home() {
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prompt.trim() || loading) return;
+    const userMsg = prompt;
+    setPrompt("");
+    sendToBackend(userMsg, messages);
+  };
+
+  const handleRegenerate = () => {
+    if (messages.length < 2 || loading) return;
+    const historyWithoutLastAssistant = messages.slice(0, messages.length - 1);
+    const lastUserMsg = messages[messages.length - 2].content;
+    setMessages(historyWithoutLastAssistant);
+    sendToBackend(lastUserMsg, historyWithoutLastAssistant.slice(0, historyWithoutLastAssistant.length - 1));
+  };
+
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "#0b0f19", color: "#e2e8f0", fontFamily: "system-ui, -apple-system, sans-serif", overflow: "hidden" }}>
       
-      {/* SIDEBAR COLLASSABILE */}
+      {/* SIDEBAR */}
       <aside style={{ 
         width: isSidebarOpen ? "280px" : "0px", 
         transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -334,10 +373,10 @@ export default function Home() {
       {/* AREA PRINCIPALE */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", position: "relative", minWidth: 0 }}>
         
-        {/* HEADER (Pulito, niente più badge ingombranti) */}
+        {/* HEADER */}
         <header style={{ padding: "1.25rem 2rem", borderBottom: "1px solid #1f2937", backgroundColor: "rgba(11, 15, 25, 0.8)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", transition: "0.2s" }}
@@ -348,19 +387,69 @@ export default function Home() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
             </button>
 
-            <h1 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0, color: "#f8fafc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {activeNotebook ? activeNotebook.name : "Nuovo Quaderno"}
-            </h1>
+            {/* TITOLO ED EDITING NOME NOTEBOOK */}
+            {activeNotebook && isEditingName ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <input
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveRename();
+                    if (e.key === "Escape") setIsEditingName(false);
+                  }}
+                  autoFocus
+                  style={{ backgroundColor: "#1f2937", border: "1px solid #3b82f6", color: "#fff", fontSize: "1.1rem", fontWeight: "600", borderRadius: "6px", padding: "4px 8px", outline: "none" }}
+                />
+                <button onClick={handleSaveRename} style={{ background: "none", border: "none", color: "#10b981", cursor: "pointer", fontSize: "1.1rem", padding: "2px 6px" }} title="Salva">✓</button>
+                <button onClick={() => setIsEditingName(false)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "1.1rem", padding: "2px 6px" }} title="Annulla">✕</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                <h1 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0, color: "#f8fafc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {activeNotebook ? activeNotebook.name : "Nuovo Quaderno"}
+                </h1>
+                {activeNotebook && (
+                  <button
+                    onClick={() => setIsEditingName(true)}
+                    style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", padding: "4px", borderRadius: "4px", display: "flex", alignItems: "center" }}
+                    onMouseOver={(e) => e.currentTarget.style.color = "#60a5fa"}
+                    onMouseOut={(e) => e.currentTarget.style.color = "#6b7280"}
+                    title="Rinomina Quaderno"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            {/* NUOVO PULSANTE GESTIONE FONTI */}
+            
+            {/* TOGGLE MODALITÀ STUDIO / ESAME */}
+            {activeNotebook && (
+              <div style={{ display: "flex", backgroundColor: "#1f2937", borderRadius: "8px", padding: "3px", border: "1px solid #374151" }}>
+                <button
+                  onClick={() => setStudyMode("study")}
+                  style={{ padding: "4px 10px", borderRadius: "6px", border: "none", backgroundColor: studyMode === "study" ? "#2563eb" : "transparent", color: studyMode === "study" ? "#fff" : "#9ca3af", fontSize: "0.75rem", fontWeight: "600", cursor: "pointer", transition: "0.2s" }}
+                >
+                  📖 Studio
+                </button>
+                <button
+                  onClick={() => setStudyMode("exam")}
+                  style={{ padding: "4px 10px", borderRadius: "6px", border: "none", backgroundColor: studyMode === "exam" ? "#dc2626" : "transparent", color: studyMode === "exam" ? "#fff" : "#9ca3af", fontSize: "0.75rem", fontWeight: "600", cursor: "pointer", transition: "0.2s" }}
+                >
+                  🎓 Esame
+                </button>
+              </div>
+            )}
+
             {activeNotebook && (
               <button onClick={() => setIsSourcesModalOpen(true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "0.5rem 1rem", borderRadius: "8px", backgroundColor: "#1e293b", color: "#60a5fa", fontSize: "0.85rem", fontWeight: "600", border: "1px solid #3b82f640", cursor: "pointer", transition: "0.2s" }}
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#334155"}
                 onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
               >
-                📚 Gestione Fonti ({activeNotebook.filenames.length})
+                📚 Fonti ({activeNotebook.filenames.length})
               </button>
             )}
 
@@ -376,11 +465,10 @@ export default function Home() {
           </div>
         </header>
 
-        {/* CHAT AREA & EMPTY STATE */}
+        {/* CHAT AREA */}
         <section style={{ flex: 1, padding: "2rem", overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center" }}>
           
           {!activeNotebook ? (
-            /* NUOVO EMPTY STATE: Area di Caricamento Centrale Stile Notion */
             <div style={{ margin: "auto", display: "flex", flexDirection: "column", alignItems: "center", maxWidth: "500px", width: "100%", padding: "2rem 0" }}>
               <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📚</div>
               <h3 style={{ margin: "0 0 0.5rem 0", color: "#f8fafc", fontSize: "1.5rem", fontWeight: "700" }}>Crea un nuovo Quaderno</h3>
@@ -398,19 +486,21 @@ export default function Home() {
               </label>
             </div>
           ) : (
-            /* MESSAGGI CHAT */
             <div style={{ width: "100%", maxWidth: "800px", display: "flex", flexDirection: "column", gap: "1.5rem", paddingBottom: "2rem" }}>
               {messages.length === 0 ? (
                 <div style={{ margin: "auto", textAlign: "center", paddingTop: "15vh", color: "#6b7280" }}>
                   <h3 style={{ margin: "0 0 0.5rem 0", color: "#e2e8f0", fontSize: "1.2rem" }}>Quaderno pronto</h3>
-                  <p style={{ margin: 0, fontSize: "0.95rem" }}>Fai una domanda per esplorare i tuoi appunti.</p>
+                  <p style={{ margin: 0, fontSize: "0.95rem" }}>
+                    {studyMode === "exam" ? "Modalità **Esame** attiva: fai una domanda per farti interrogare." : "Fai una domanda o chiedi un riassunto dei tuoi documenti."}
+                  </p>
                 </div>
               ) : (
                 messages.map((msg, index) => (
                   <div key={index} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", width: "100%" }}>
                     <div style={{ fontSize: "0.75rem", fontWeight: "600", color: msg.role === "user" ? "#94a3b8" : "#3b82f6", marginBottom: "6px", marginLeft: msg.role === "user" ? "0" : "4px", marginRight: msg.role === "user" ? "4px" : "0" }}>
-                      {msg.role === "user" ? "Tu" : "Qwen 2.5 (RAG)"}
+                      {msg.role === "user" ? "Tu" : studyMode === "exam" ? "🎓 Docente (Esame)" : "Qwen 2.5 (Assistente)"}
                     </div>
+                    
                     <div style={{
                       maxWidth: "85%", padding: "1rem 1.25rem", borderRadius: "16px",
                       borderBottomRightRadius: msg.role === "user" ? "4px" : "16px",
@@ -427,6 +517,17 @@ export default function Home() {
                         <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
                       )}
                     </div>
+
+                    {msg.role === "assistant" && index === messages.length - 1 && !loading && (
+                      <div style={{ display: "flex", gap: "8px", marginTop: "6px", marginLeft: "4px" }}>
+                        <button onClick={() => navigator.clipboard.writeText(msg.content)} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px", padding: "2px 6px", borderRadius: "4px" }} onMouseOver={(e) => e.currentTarget.style.color = "#fff"} onMouseOut={(e) => e.currentTarget.style.color = "#9ca3af"}>
+                          📋 Copia
+                        </button>
+                        <button onClick={handleRegenerate} style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "4px", padding: "2px 6px", borderRadius: "4px" }} onMouseOver={(e) => e.currentTarget.style.color = "#fff"} onMouseOut={(e) => e.currentTarget.style.color = "#9ca3af"}>
+                          🔄 Rigenera
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -440,7 +541,7 @@ export default function Home() {
           <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "800px", position: "relative", display: "flex", alignItems: "flex-end", backgroundColor: "#1f2937", borderRadius: "16px", border: "1px solid #374151", padding: "0.5rem", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}>
             <textarea
               value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-              placeholder={activeNotebook ? "Chiedi qualcosa sui documenti..." : "Crea prima un quaderno per fare domande..."}
+              placeholder={studyMode === "exam" ? "Rispondi al professore..." : (activeNotebook ? "Chiedi qualcosa sui documenti..." : "Crea prima un quaderno...")}
               disabled={!activeNotebook}
               style={{ flex: 1, padding: "0.75rem 1rem", minHeight: "24px", maxHeight: "150px", backgroundColor: "transparent", border: "none", color: "#f8fafc", fontSize: "1rem", resize: "none", outline: "none", fontFamily: "inherit" }}
               rows={1}
@@ -459,7 +560,7 @@ export default function Home() {
           </form>
         </div>
 
-        {/* MODALE GESTIONE FONTI (OVERLAY) */}
+        {/* MODALE FONTI */}
         {isSourcesModalOpen && activeNotebook && (
           <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(11, 15, 25, 0.7)", backdropFilter: "blur(6px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
             <div style={{ width: "100%", maxWidth: "550px", backgroundColor: "#111827", borderRadius: "16px", border: "1px solid #374151", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -472,12 +573,11 @@ export default function Home() {
               </div>
               
               <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                
                 <div>
                   <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", marginBottom: "0.75rem" }}>Documenti Inclusi ({activeNotebook.filenames.length})</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
                     {activeNotebook.filenames.length === 0 ? (
-                      <p style={{ color: "#64748b", fontSize: "0.9rem", fontStyle: "italic", margin: 0 }}>Nessun documento. Aggiungine uno qui sotto.</p>
+                      <p style={{ color: "#64748b", fontSize: "0.9rem", fontStyle: "italic", margin: 0 }}>Nessun documento.</p>
                     ) : (
                       activeNotebook.filenames.map((fname, idx) => (
                         <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", backgroundColor: "#1f2937", borderRadius: "8px", border: "1px solid #374151" }}>
@@ -485,7 +585,7 @@ export default function Home() {
                             <span style={{ fontSize: "1.2rem" }}>📄</span>
                             <span style={{ fontSize: "0.95rem", color: "#e2e8f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: "500" }}>{fname}</span>
                           </div>
-                          <button onClick={(e) => handleDeleteSingleFile(fname, e)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "6px", borderRadius: "6px", display: "flex" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7f1d1d40"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"} title="Rimuovi file">
+                          <button onClick={(e) => handleDeleteSingleFile(fname, e)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "6px", borderRadius: "6px", display: "flex" }} title="Rimuovi file">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6m4-6v6"/></svg>
                           </button>
                         </div>
@@ -496,16 +596,14 @@ export default function Home() {
 
                 <div>
                   <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", marginBottom: "0.75rem" }}>Aggiungi nuovo file</div>
-                  <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem", border: "2px dashed #4b5563", borderRadius: "8px", cursor: uploading ? "wait" : "pointer", backgroundColor: "#1f2937", transition: "0.2s" }}
-                         onMouseOver={(e) => !uploading && (e.currentTarget.style.borderColor = "#3b82f6", e.currentTarget.style.backgroundColor = "#1e3a8a30")}
-                         onMouseOut={(e) => !uploading && (e.currentTarget.style.borderColor = "#4b5563", e.currentTarget.style.backgroundColor = "#1f2937")}>
+                  <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem", border: "2px dashed #4b5563", borderRadius: "8px", cursor: uploading ? "wait" : "pointer", backgroundColor: "#1f2937", transition: "0.2s" }}>
                     <span style={{ fontSize: "1.5rem", marginBottom: "8px" }}>{uploading ? "⏳" : "📥"}</span>
-                    <span style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "0.95rem" }}>{uploading ? "Caricamento ed estrazione..." : "Trascina qui o clicca per caricare un PDF"}</span>
+                    <span style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "0.95rem" }}>{uploading ? "Caricamento in corso..." : "Trascina qui o clicca per caricare un PDF"}</span>
                     <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleAutoUpload} disabled={uploading} />
                   </label>
                 </div>
-
               </div>
+
             </div>
           </div>
         )}
