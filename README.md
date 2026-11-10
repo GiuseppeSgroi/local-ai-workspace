@@ -1,6 +1,3 @@
-Ecco il codice completo e aggiornato del file **`README.md`**, pronto da incollare. Ho integrato la guida passo-passo con il comando per scaricare il modello `qwen2.5:3b` la prima volta, la rinomina dei quaderni e le modalità Studio ed Esame:
-
-```markdown
 # 🧠 Local AI Workspace
 
 <p align="center">
