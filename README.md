@@ -107,15 +107,3 @@ Orchestratore: Docker Compose.
 
 📝 Licenza
 Questo progetto è rilasciato sotto licenza AGPL-3.0.
-
-
----
-
-### Per aggiornare la pagina GitHub subito dopo aver salvato:
-
-Apri il terminale su VS Code e lancia questi tre comandi rapida sequenza:
-
-```powershell
-git add README.md
-git commit -m "docs: complete overhaul of README with accurate installation and features guide"
-git push origin main
